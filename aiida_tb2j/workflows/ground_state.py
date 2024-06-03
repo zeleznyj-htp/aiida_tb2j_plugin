@@ -9,23 +9,29 @@ import numpy as np
 
 def validate_scale_processes_options(value, _):
 
-    required_keys = ['max_mpiprocs_per_machine', 'tot_num_mpiprocs']
-    present_keys = []
     if value:
-        scale_options = value.get_dict()
+        scale_options = value.get_dict() if isinstance(value, orm.Dict) else value
+        if 'max_mpiprocs_per_machine' not in scale_options:
+            return "The 'max_mpiprocs_per_machine' option must be present in the 'scale_processes_options' input variable."
         for k, v in scale_options.items():
-            if k in required_keys:
+            if k in ['max_mpiprocs_per_machine', 'max_machines']:
                 if not isinstance(v, int):
                     return f"The '{k}' option must be an integer."
                 elif v <= 0:
                     return f"The '{k}' option must be a positive integer."
-                else:
-                    present_keys.append(k)
+            elif k == 'name':
+                if not isinstance(v, str):
+                    return "The 'name' option must be of type 'str'."
+            elif k == 'alternate_queue':
+                if not isinstance(v, dict):
+                    return "The 'alternate_queue' option must be of type 'dict'."
+                if 'name' not in v:
+                    return "The 'name' option must be present in the 'alternate_queue' dictionary."
+                message = validate_scale_processes_options(v, _)
+                if message:
+                    return message + " This error comes from the 'alternate_queue' dictionary."
             else:
                 return f"Unrecognized option '{k}'."
-        for key in required_keys:
-            if key not in present_keys:
-                return f"The {key} option must be present in the 'scale_processes_options' input variable."
 
 def validate_optimization_options(value, _):
 
@@ -60,6 +66,30 @@ def validate_inputs(value, _):
         if 'max_num_atoms' in optimization_options:
             if optimization_options['max_num_atoms'] < len(structure.sites):
                 return "The allowed maximum number of atoms should be greater or equal than the current number of atoms."
+
+def scale_resources(scale_dict, new_num_mpiprocs):
+
+    max_mpiprocs = scale_dict['max_mpiprocs_per_machine']
+    max_machines = scale_dict.pop('max_machines', np.inf)
+
+    num_machines = 0
+    num_mpiprocs_per_machine = new_num_mpiprocs
+    queue_name = scale_dict.pop('name', None)
+    while num_mpiprocs_per_machine > max_mpiprocs:
+        num_machines += 1
+        tot_num_mpiprocs = new_num_mpiprocs + (num_machines - new_num_mpiprocs % num_machines) % num_machines
+        num_mpiprocs_per_machine = int(tot_num_mpiprocs / num_machines)
+        if num_machines > max_machines:
+            if 'alternate_queue' in scale_dict:
+                num_machines, num_mpiprocs_per_machine, queue_name = scale_resources(scale_dict['alternate_queue'], new_num_mpiprocs)
+            else:
+                num_machines = max_machines
+                num_mpiprocs_per_machine = max_mpiprocs
+            break
+
+    num_machines = 1 if not num_machines else num_machines
+
+    return num_machines, num_mpiprocs_per_machine, queue_name
 
 @calcfunction
 def set_groundstate_info(
@@ -135,6 +165,10 @@ class GroundStateWorkChain(WorkChain):
         self.ctx.kpoints = self.inputs.kpoints
         self.ctx.options = self.inputs.options
 
+        resources = self.inputs.options['resources']
+        self.ctx.tot_num_mpiprocs = resources['tot_num_mpiprocs'] if 'tot_num_mpiprocs' in resources else resources['num_machines']*resources['num_mpiprocs_per_machine']
+        self.ctx.num_mpiprocs = resources['num_mpiprocs_per_machine'] if 'num_mpiprocs_per_machine' in resources else int(resources['tot_num_mpiprocs'] / resources['num_machines'])
+
         self.ctx.isotropic = optimization_options.pop('isotropic', True)
         self.ctx.energy_threshold = float(optimization_options.pop('energy', 1e-4))
         self.ctx.max_iterations = int(optimization_options.pop('max_iterations', 3))
@@ -196,29 +230,39 @@ class GroundStateWorkChain(WorkChain):
 
         return new_kpoints
 
+    def _scale_resources(self, scale_dict):
+
+        ratio = int( len(self.ctx.structure.sites) / len(self.inputs.structure.sites) )
+        new_num_mpiprocs = ratio * self.ctx.tot_num_mpiprocs
+
+        max_mpiprocs = scale_dict['max_mpiprocs_per_machine']
+        max_machines = scale_dict.pop('max_machines', np.inf)
+
+        num_machines = 0
+        num_mpiprocs_per_machine = new_num_mpiprocs
+        while num_mpiprocs_per_machine > max_mpiprocs:
+            num_machines += 1
+            tot_num_mpiprocs = new_num_mpiprocs + (num_machines - new_num_mpiprocs % num_machines) % num_machines
+            num_mpiprocs_per_machine = int(tot_num_mpiprocs / num_machines)
+            if num_machines > max_machines:
+                if 'alternate_queue' in scale_dict:
+                    num_machines, num_mpiprocs_per_machine = self._scale_resources
+
     def _get_new_options(self):
 
         ratio = int( len(self.ctx.structure.sites)/len(self.inputs.structure.sites) )
         new_options = self.inputs.options.get_dict()
-        new_num_mpiprocs = ratio * self.inputs.scale_processes_options['tot_num_mpiprocs']
-        max_mpiprocs = self.inputs.scale_processes_options['max_mpiprocs_per_machine']
-        
-        divisor = 1
-        while True:
-            tot_num_mpiprocs = new_num_mpiprocs + (divisor - new_num_mpiprocs % divisor) % divisor
-            num_mpiprocs_per_machine = int(tot_num_mpiprocs / divisor)
-            if num_mpiprocs_per_machine <= max_mpiprocs:
-                break
-            divisor += 1
+        new_num_mpiprocs = ratio * self.ctx.tot_num_mpiprocs
+        scale_dict = self.inputs.scale_processes_options.get_dict()
+
+        num_machines, num_mpiprocs_per_machine, queue_name = scale_resources(scale_dict, new_num_mpiprocs)
 
         new_options['resources'] = {
-            'tot_num_mpiprocs': tot_num_mpiprocs,
+            'num_machines': num_machines,
             'num_mpiprocs_per_machine': num_mpiprocs_per_machine
         }
-        try:
-            new_options['max_memory_kb'] *= ratio
-        except KeyError:
-            pass
+        if queue_name:
+            new_options['queue_name'] = queue_name
 
         return orm.Dict(dict=new_options)
 
