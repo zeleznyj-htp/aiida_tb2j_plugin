@@ -230,24 +230,6 @@ class GroundStateWorkChain(WorkChain):
 
         return new_kpoints
 
-    def _scale_resources(self, scale_dict):
-
-        ratio = int( len(self.ctx.structure.sites) / len(self.inputs.structure.sites) )
-        new_num_mpiprocs = ratio * self.ctx.tot_num_mpiprocs
-
-        max_mpiprocs = scale_dict['max_mpiprocs_per_machine']
-        max_machines = scale_dict.pop('max_machines', np.inf)
-
-        num_machines = 0
-        num_mpiprocs_per_machine = new_num_mpiprocs
-        while num_mpiprocs_per_machine > max_mpiprocs:
-            num_machines += 1
-            tot_num_mpiprocs = new_num_mpiprocs + (num_machines - new_num_mpiprocs % num_machines) % num_machines
-            num_mpiprocs_per_machine = int(tot_num_mpiprocs / num_machines)
-            if num_machines > max_machines:
-                if 'alternate_queue' in scale_dict:
-                    num_machines, num_mpiprocs_per_machine = self._scale_resources
-
     def _get_new_options(self):
 
         ratio = int( len(self.ctx.structure.sites)/len(self.inputs.structure.sites) )
