@@ -8,15 +8,13 @@ np.seterr(divide='ignore', invalid='ignore')
 uz = np.array([[0.0, 0.0, 1.0]])
 I = np.eye(3)
 
-def get_rotation_arrays(magmoms):
+def get_rotation_arrays(magmoms, u=uz):
 
     dim = magmoms.shape[0]
     v = magmoms
-    n = v[:, [1, 0, 2]]
-    n[:, 0] *= -1
-    n[:, -1] *= 0
+    n = np.cross(u, v)
     n /= np.linalg.norm(n, axis=-1).reshape(dim, 1)
-    z = np.repeat(uz, dim, axis=0)
+    z = np.repeat(u, dim, axis=0)
     A = np.stack([z, np.cross(n, z), n], axis=1)
     B = np.stack([v, np.cross(n, v), n], axis=1)
     R = np.einsum('nki,nkj->nij', A, B)
@@ -370,7 +368,7 @@ class ExchangeData(ArrayData):
 
         return Jq
 
-    def _H_matrix(self, kpoints, with_Jani=False, with_DMI=False, Q=None, n=[0, 0, 1]):
+    def _H_matrix(self, kpoints, with_Jani=False, with_DMI=False, Q=None, n=[0, 0, 1], u=uz):
 
         idx = sorted( set([pair[0] for pair in self.pairs]) )
         if self.non_collinear:
@@ -380,7 +378,7 @@ class ExchangeData(ArrayData):
             magmoms[:, 2] = self.magmoms()[idx]
         magmoms /= np.linalg.norm(magmoms, axis=-1).reshape(-1, 1)
 
-        U, V = get_rotation_arrays(magmoms)
+        U, V = get_rotation_arrays(magmoms, u=u)
 
         J0 = self._Jq(np.array([[0, 0, 0]]), with_Jani, with_DMI, Q=Q, n=n)
         J0 = -Hermitize( J0 )
@@ -396,9 +394,9 @@ class ExchangeData(ArrayData):
             [np.transpose(B, axes=(0, 2, 1)).conjugate(), A2 - C]
         ])
 
-    def _magnon_energies(self, kpoints, with_Jani=True, with_DMI=True, Q=None, n=[0, 0, 1]):
+    def _magnon_energies(self, kpoints, with_Jani=True, with_DMI=True, Q=None, n=[0, 0, 1], u=uz):
 
-        H = self._H_matrix(kpoints, with_Jani, with_DMI, Q=Q, n=n)
+        H = self._H_matrix(kpoints, with_Jani, with_DMI, Q=Q, n=n, u=u)
         N = int( H.shape[-1] / 2 )
         I = np.eye(N)
 
