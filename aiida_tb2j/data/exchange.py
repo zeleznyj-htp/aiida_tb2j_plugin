@@ -382,13 +382,12 @@ class ExchangeData(ArrayData):
 
         J0 = self._Jq(np.array([[0, 0, 0]]), with_Jani, with_DMI, Q=Q, n=n)
         J0 = -Hermitize( J0 )
-        Jq1 = -Hermitize( self._Jq(kpoints, with_Jani, with_DMI, Q=Q, n=n) )
-        Jq2 = -Hermitize( self._Jq(-kpoints, with_Jani, with_DMI, Q=Q, n=n) )
+        Jq = -Hermitize( self._Jq(kpoints, with_Jani, with_DMI, Q=Q, n=n) )
 
         C = np.diag( np.einsum('ix,ijxy,jy->i', V, 2*J0[0], V) )
-        B = np.einsum('ix,kijxy,jy->kij', U, Jq1, U)
-        A1 = np.einsum('ix,kijxy,jy->kij', U, Jq1, U.conjugate())
-        A2 = np.einsum('ix,kijxy,jy->kij', U.conjugate(), Jq2, U)
+        B = np.einsum('ix,kijxy,jy->kij', U, Jq, U)
+        A1 = np.einsum('ix,kijxy,jy->kij', U, Jq, U.conjugate())
+        A2 = np.einsum('ix,kijxy,jy->kij', U.conjugate(), Jq, U)
 
         return np.block([
             [A1 - C, B],
