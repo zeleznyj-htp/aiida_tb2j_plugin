@@ -14,20 +14,32 @@ def fromfile(file, dtype=float, count=-1, offset=0, like=None):
     
     return np.frombuffer(buffer, dtype=dtype, count=count, offset=offset, like=None)
 
+def read_info(file):
+
+    no, spin, nsx, nsy, nsz = fromfile(file, dtype=np.int32, count=5, offset=4).T
+    nsc = np.stack([nsx, nsy, nsz])
+    ncol = fromfile(file, dtype=np.int32, count=no, offset=8)
+    col_list = [fromfile(file, dtype=np.int32, count=n, offset=8) for n in ncol]
+    col = np.concatenate(col_list)
+    dm_list = [np.concatenate([fromfile(file, dtype=np.float64, count=n, offset=8) for n in ncol]) for i in range(spin)]
+    dm = np.array(dm_list).T
+
+    return no, spin, nsc, ncol, col, dm
+
 def read_DM(remote_folder, filename='aiida.DM'):    
    
     full_path = os.path.join(remote_folder.get_remote_path(), filename)
     authinfo = remote_folder.get_authinfo()
     
     with authinfo.get_transport() as transport:
-        with transport.sftp.open(full_path, 'rb') as File:   
-            no, spin, nsx, nsy, nsz = fromfile(File, dtype=np.int32, count=5, offset=4).T        
-            nsc = np.stack([nsx, nsy, nsz])
-            ncol = fromfile(File, dtype=np.int32, count=no, offset=8)
-            col_list = [fromfile(File, dtype=np.int32, count=n, offset=8) for n in ncol]
-            col = np.concatenate(col_list)
-            dm_list = [np.concatenate([fromfile(File, dtype=np.float64, count=n, offset=8) for n in ncol]) for i in range(spin)]
-            dm = np.array(dm_list).T
+        try:
+            with transport.sftp.open(full_path, 'rb') as File:
+                no, spin, nsc, ncol, col, dm = read_info(File)
+        except AttributeError:
+            with open(full_path, 'rb') as File:
+                no, spin, nsc, ncol, col, dm = read_info(File)
+        except:
+            raise RuntimeError("Error while reading the density matrix file.")
             
     xyz = [[x, 0, 0] for x in range(no)]
     sc = SuperCell([no, 1, 1], nsc=nsc)
