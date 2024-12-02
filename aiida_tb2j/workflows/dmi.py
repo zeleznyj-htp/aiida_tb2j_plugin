@@ -1,3 +1,4 @@
+import warnings
 from aiida import orm
 from aiida.common import AttributeDict
 from aiida.common.exceptions import NotExistentAttributeError
@@ -41,7 +42,7 @@ def validate_spin_mode(value, _):
 
     if value:
         if value not in ['collinear', 'non-collinear', 'long']:
-            return (f"Unrecognized option '{value}'. Available options are: 'collinear', 'non-collinear', 'long'.")
+            return f"Unrecognized option '{value}'. Valid options: 'collinear', 'non-collinear', 'long'."
 
 def validate_rotation_mode(value, _):
 
@@ -134,7 +135,7 @@ def get_exchange(**kwargs):
     content = merger.main_dat.__dict__
     correct_content(content)
 
-    exchange_data = ExchangeData.load_tb2j_content(content, pbc=pbc, isotropic=False)
+    exchange_data = ExchangeData.load_tb2j(content, pbc=pbc, isotropic=False)
 
     return exchange_data
 
@@ -163,7 +164,7 @@ class DMIWorkChain(WorkChain):
         spec.input(
             'rotation_mode',
             valid_type=orm.Str,
-            default=lambda: orm.Str('structure'),
+            default=lambda: orm.Str('spin'),
             help='Specifies wheter the structure or the spins will be rotated.',
             validator=validate_rotation_mode,
             required=True
@@ -177,9 +178,14 @@ class DMIWorkChain(WorkChain):
 
         spec.output('exchange', valid_type=ExchangeData, required=True)
 
-        spec.exit_code(400, 'ERROR_TB2J_REF', message='The reference TB2J workflows failed.')
-        spec.exit_code(401, 'ERROR_TB2J_ROT', message='At least one of the rotated TB2J workflows failed.')
-        spec.exit_code(402, 'ERROR_MERGE_TB2J', message='The merging of the exchange values failed.')
+        spec.exit_code(400, 
+            'ERROR_TB2J_REF', 
+            message='The reference TB2J workflow failed.'
+        )
+        spec.exit_code(401, 
+            'ERROR_MERGE_TB2J', 
+            message='The equation matrix is singular. The exchange tensor cannot be reconstructed.'
+        )
 
     def run_reference_process(self):
 
@@ -242,24 +248,23 @@ class DMIWorkChain(WorkChain):
 
         ref_process = self.ctx.ref_process
         rotation_axes = self.ctx.rotation_axes
-        rotated_processes = {axis: self.ctx[f'tb2j_{axis}'] for axis in rotation_axes}
-        if not all([process.is_finished_ok for process in list(rotated_processes.values()) + [ref_process,]]):
-            return self.exit_codes.ERROR_TB2J_ROT
-        main_process = choose_main_process(ref_process, *rotated_processes.values())
+        rotated = {
+            axis: process for axis in rotation_axes 
+            if (process := self.ctx[f'tb2j_{axis}']).is_finished_ok
+        }
+        main_process = choose_main_process(ref_process, *rotated.values())
 
-        folders = {f'folder_{rotation_axes.index(axis)}': process.outputs.retrieved for axis, process in rotated_processes.items()}
+        folders = {
+            f'folder_{axis}': process.outputs.retrieved for axis, process in rotated.items()
+        }
         folders['ref_folder'] = ref_process.outputs.retrieved
         folders['main_folder'] = main_process.outputs.retrieved
-        folders['structure'] = self.inputs.structure
-    
-        exchange = get_exchange(**folders)
+        folders['structure'] = self.inputs.structure 
 
-        if 'array|Jiso' in exchange.attributes and 'array|DMI' in exchange.attributes:
-            self.report(
-                "The exchange constants including the DMI interaction and the " 
-                "anisotropic exchange were obtained succesfully."
-            )
-        else:
+        try:
+            warnings.simplefilter("error", UserWarning)
+            exchange = get_exchange(**folders)
+        except UserWarning:
             return self.exit_codes.ERROR_MERGE_TB2J
 
         self.out('exchange', exchange)
