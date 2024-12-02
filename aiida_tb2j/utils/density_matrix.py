@@ -1,9 +1,9 @@
 import os
 import numpy as np
-from sisl import Atom, Geometry, SuperCell
+from sisl import Atom, Geometry, Lattice
 from sisl.physics import DensityMatrix
 from sisl.sparse import _ncol_to_indptr
-from sisl.io.siesta._help import _mat_spin_convert
+from sisl.io.siesta._help import _mat_spin_convert, _csr_from_siesta
 from sisl.io.siesta.binaries import _add_overlap
 import sisl._array as _a
 
@@ -42,8 +42,8 @@ def read_DM(remote_folder, filename='aiida.DM'):
             raise RuntimeError("Error while reading the density matrix file.")
             
     xyz = [[x, 0, 0] for x in range(no)]
-    sc = SuperCell([no, 1, 1], nsc=nsc)
-    geom = Geometry(xyz, Atom(1), sc=sc)
+    lattice = Lattice([no, 1, 1], nsc=nsc)
+    geom = Geometry(xyz, Atom(1), lattice=lattice)
       
     DM = DensityMatrix(geom, spin, nnzpr=1, dtype=np.float64, orthogonal=False)
     
@@ -58,6 +58,9 @@ def read_DM(remote_folder, filename='aiida.DM'):
     DM._csr._D[:, spin] = 0.0
 
     _mat_spin_convert(DM)
+    if nsc[0] != 0 or geom.no_s >= col.max():
+        print('hola')
+        _csr_from_siesta(geom, DM._csr)
 
     DM = DM.transpose(spin=False, sort=True)
     _add_overlap(DM, None, 'dmSileSiesta.read_density_matrix')
