@@ -146,7 +146,7 @@ class GroundStateWorkChain(WorkChain):
 
         spec.inputs.validator = validate_inputs
 
-        spec.output('exchange', valid_type=ExchangeData, required=True)
+        spec.expose_outputs(TB2JSiestaWorkChain)
         spec.output('groundstate_info', valid_type=orm.Dict, required=True)
 
         spec.exit_code(300, 'ERROR_EXCHANGE_WC', message="The WorkChain to calculate the exchange parameters failed.")
@@ -292,7 +292,7 @@ class GroundStateWorkChain(WorkChain):
         opt_options = self.inputs.optimization_options if 'optimization_options' in self.inputs else self.inputs.options
         groundstate_info = set_groundstate_info(final_exchange, opt_options)
 
-        self.out('exchange', final_exchange)
+        self.out_many(self.exposed_outputs(self.ctx.workchain_exchange, TB2JSiestaWorkChain))
         self.out('groundstate_info', groundstate_info)
 
         self.report('Magnetic GroundState workchain completed.')

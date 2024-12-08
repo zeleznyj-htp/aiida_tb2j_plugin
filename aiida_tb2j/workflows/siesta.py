@@ -162,9 +162,12 @@ class TB2JSiestaWorkChain(WorkChain):
             cls.return_results
         )
 
+        spec.expose_outputs(
+            SiestaCalculation, exclude=('output_parameters', 'ion_files', 'retrieved')
+        )
+        spec.output('retrieved', valid_type=orm.FolderData, required=True)
+        spec.output('dft_parameters', valid_type=orm.Dict, required=True)
         spec.output('exchange', valid_type=ExchangeData, required=False)
-        spec.output('retrieved', valid_type=orm.FolderData)
-        spec.output('remote_folder', valid_type=orm.RemoteData)
 
         spec.exit_code(400, 'ERROR_SIESTA_WC', message='The main SiestaBaseWorkChain failed.')
         spec.exit_code(401, 'ERROR_TB2J_PLUGIN', message='The TB2J calculation failed.')
@@ -270,11 +273,10 @@ class TB2JSiestaWorkChain(WorkChain):
         if 'exchange' in self.ctx.tb2j_step.outputs:
             exchange_data = self.ctx.tb2j_step.outputs.exchange
             self.out('exchange', exchange_data)
-        
-        retrieved = self.ctx.tb2j_step.outputs.retrieved
-        remote = self.ctx.tb2j_step.outputs.remote_folder
-        self.out('retrieved', retrieved)
-        self.out('remote_folder', remote)
+
+        self.out('retrieved', self.ctx.tb2j_step.outputs.retrieved)
+        self.out('dft_parameters', self.ctx.siesta_wc.outputs.output_parameters)
+        self.out_many(self.exposed_outputs(self.ctx.siesta_wc, SiestaCalculation))
 
         self.report('TB2J workchain completed succesfully.')
         return ExitCode(0)

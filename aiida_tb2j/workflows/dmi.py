@@ -176,7 +176,7 @@ class DMIWorkChain(WorkChain):
             cls.return_results
         )
 
-        spec.output('exchange', valid_type=ExchangeData, required=True)
+        spec.expose_outputs(TB2JSiestaWorkChain)
 
         spec.exit_code(400, 
             'ERROR_TB2J_REF', 
@@ -268,5 +268,6 @@ class DMIWorkChain(WorkChain):
             return self.exit_codes.ERROR_MERGE_TB2J
 
         self.out('exchange', exchange)
+        self.out_many(self.exposed_outputs(main_process, TB2JSiestaWorkChain))
 
         return ExitCode(0)
