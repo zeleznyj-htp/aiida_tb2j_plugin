@@ -8,14 +8,14 @@ class CurieData(ArrayData):
     @property
     def units(self):
 
-        return self.get_attribute('units', None)
+        return self.base.attributes.get('units', None)
 
     @units.setter
     def units(self, value):
 
         the_units = dict(value)
 
-        self.set_attribute('units', the_units)
+        self.base.attributes.set('units', the_units)
 
     def set_temperature_values(self, values):
 

@@ -79,7 +79,7 @@ class ExchangeData(ArrayData):
     @property
     def cell(self):
 
-        return np.array( self.get_attribute('cell') )
+        return np.array( self.base.attributes.get('cell') )
 
     @cell.setter
     def cell(self, value):
@@ -95,16 +95,16 @@ class ExchangeData(ArrayData):
             raise ModificationNotAllowed("ExchangeData cannot be modified because it has already been stored.")
 
         the_cell = _get_valid_cell(value)
-        self.set_attribute('cell', the_cell)
+        self.base.attributes.set('cell', the_cell)
 
     def reciprocal_cell(self):
 
-        return 2*np.pi* np.linalg.inv( self.get_attribute('cell') ).T
+        return 2*np.pi* np.linalg.inv( self.base.attributes.get('cell') ).T
 
     @property
     def pbc(self):
 
-        return self.get_attribute('pbc', default=(True, True, True))
+        return self.base.attributes.get('pbc', default=(True, True, True))
 
     @pbc.setter
     def pbc(self, value):
@@ -120,12 +120,12 @@ class ExchangeData(ArrayData):
             raise ModificationNotAllowed("ExchangeData cannot be modified because it has already been stored.")
         the_pbc = tuple(get_valid_pbc(value))
 
-        self.set_attribute('pbc', the_pbc)
+        self.base.attributes.set('pbc', the_pbc)
 
     @property
     def sites(self):
 
-        raw_sites = self.get_attribute('sites')
+        raw_sites = self.base.attributes.get('sites')
 
         return [MagSite(raw=i) for i in raw_sites]
 
@@ -148,7 +148,7 @@ class ExchangeData(ArrayData):
         if len(sites) != len(magmoms):
             raise ValueError('The number of magnetic moments has to coincide with the number of sites.')
 
-        self.set_attribute('sites', [MagSite(site=site, magmom=magmom).get_raw() for site, magmom in zip(sites, magmoms)])
+        self.base.attributes.set('sites', [MagSite(site=site, magmom=magmom).get_raw() for site, magmom in zip(sites, magmoms)])
 
     def set_structure_info(self, structure, magmoms=None):
 
@@ -165,7 +165,7 @@ class ExchangeData(ArrayData):
     @property
     def magnetic_elements(self):
 
-        return self.get_attribute('magnetic_elements')
+        return self.base.attributes.get('magnetic_elements')
 
     @magnetic_elements.setter
     def magnetic_elements(self, symbols):
@@ -186,13 +186,13 @@ class ExchangeData(ArrayData):
 
         validate_symbols_tuple(symbols_tuple)
 
-        self.set_attribute('magnetic_elements', tuple(symbols_tuple))
+        self.base.attributes.set('magnetic_elements', tuple(symbols_tuple))
         self._set_index_pairs()
 
     @property
     def pairs(self):
 
-        return self.get_attribute('pairs')
+        return self.base.attributes.get('pairs')
 
     def _set_index_pairs(self):
 
@@ -203,17 +203,17 @@ class ExchangeData(ArrayData):
         indeces = [sites.index(atom) for atom in sites if any(atom.kind_name == element for element in magnetic_elements)]
         index_pairs = list( itertools.combinations_with_replacement(indeces, 2) )
 
-        self.set_attribute('pairs', index_pairs)
+        self.base.attributes.set('pairs', index_pairs)
 
     @property
     def non_collinear(self):
 
-        return self.get_attribute('non_collinear')
+        return self.base.attributes.get('non_collinear')
 
     @non_collinear.setter
     def non_collinear(self, value):
 
-        self.set_attribute('non_collinear', bool(value))
+        self.base.attributes.set('non_collinear', bool(value))
 
     def _equivalent_magsites(self, roundup=2):
 
@@ -223,17 +223,17 @@ class ExchangeData(ArrayData):
     @property
     def units(self):
 
-        return self.get_attribute('units', None)
+        return self.base.attributes.get('units', None)
 
     @units.setter
     def units(self, value):
 
-        self.set_attribute('units', str(value))
+        self.base.attributes.set('units', str(value))
 
     def set_vectors(self, vectors, cartesian=False):
 
         try:
-            pairs = self.get_attribute('pairs')
+            pairs = self.base.attributes.get('pairs')
             pairs_number = len(pairs)
         except KeyError:
             raise ValueError("magnetic_elements must be set first, then vectors")
