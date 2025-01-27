@@ -21,7 +21,7 @@ def validate_siesta_parameters(value, _):
         spin = False
         newsintax = False
         oldsintax = False
-        ncdf_parameters = ['cdfsave', 'savehs', 'writedmhsnetcdf']
+        ncdf_parameters = ['cdfsave', 'savehs']
 
         for k, v in sortedkey:
             if k == "spinpolarized":
