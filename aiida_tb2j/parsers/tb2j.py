@@ -1,5 +1,13 @@
 from aiida.parsers import Parser
+from aiida.orm import Dict
 from aiida.common import exceptions
+
+def dict_to_list(d):
+    if not isinstance(d, dict):
+        return None
+    if len(d) == 0:
+        return None
+    return [list(d.keys()), list(d.values())]
 
 def correct_content(content):
 
@@ -43,22 +51,23 @@ class TB2JParser(Parser):
             return self.exit_codes.ERROR_NO_RETRIEVED_FOLDER
 
         try:
-            pickle_filename = [element for element in output_folder.list_object_names() if '.pickle' in element][0]
+            pickle_filename = [element for element in output_folder.list_object_names('TB2J_results') if '.pickle' in element][0]
         except IndexError:
             return self.exit_codes.ERROR_OUTPUT_PICKLE_MISSING
 
         try:
-            content = self._get_pickle_content(pickle_filename)
-            correct_content(content)
+            content = self._get_pickle_content('TB2J_results/'+pickle_filename)
+            #correct_content(content)
         except (IOError, OSError):
             return self.exit_codes.ERROR_OUTPUT_PICKLE_READ
 
         try:
-            exchange_data = self.get_exchange_data(content)
+            #I've replaced this function, the old one did not always work.
+            exchange = self.get_exchange_data_new(content)
         except (IOError, OSError):
             return self.exit_codes.ERROR_OUTPUT_EXCHANGE_DATA
 
-        self.out('exchange', exchange_data)
+        self.out('exchange', Dict(exchange))
 
         parser_info = {}
         parser_info['parser_info'] = 'AiiDA TB2J Parser'
@@ -106,5 +115,19 @@ class TB2JParser(Parser):
            exchange.set_exchange_array('DMI', DMI)
            Biquad = [ [content['biquadratic_Jdict'][key] for key in branch] for branch in bkeys ]
            exchange.set_exchange_array('Biquad', Biquad)
+
+        return exchange
+
+    @staticmethod
+    def get_exchange_data_new(content):
+
+        exchange = {}
+        exchange['collinear'] = content['colinear']
+        exchange['distance'] = dict_to_list(content['distance_dict'])
+        exchange['Jij'] = dict_to_list(content['exchange_Jdict'])
+        if not content['colinear']:
+            exchange['Jani'] = dict_to_list(content['Jani_dict'])
+            exchange['DMI'] = dict_to_list(content['dmi_ddict'])
+            exchange['biquadratic_Jij'] = dict_to_list(content['biquadratic_Jdict'])
 
         return exchange

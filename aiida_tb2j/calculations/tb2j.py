@@ -4,7 +4,7 @@ from aiida import orm
 from aiida.common import CalcInfo, CodeInfo
 from ..data import ExchangeData
 
-def validate_parameters(value, _):
+def validate_parameters(value, port):
 
     floattype_keys = [
         'rcut',
@@ -12,7 +12,7 @@ def validate_parameters(value, _):
         'emin',
         'emax',
         'cutoff',
-        'supercell_size'
+        'supercell_size',
     ]
     booltype_keys = [
         'use_cache',
